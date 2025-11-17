@@ -6,37 +6,141 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ArrowLeft, CheckCircle2, AlertCircle, Clock } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useAuth } from "@/context/AuthContext";
+import axios from "axios";
+import InputMask from "react-input-mask";
+import CurrencyInput from "react-currency-input-field";
 
 type AlertType = "success" | "error" | "pending" | null;
+type AlertMessage = string | null;
+type PixKeyType = "CPF" | "EMAIL" | "PHONE" | "RANDOM_KEY";
 
 const PixTransferForm = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  
+  const [pixKeyType, setPixKeyType] = useState<PixKeyType>("EMAIL");
   const [pixKey, setPixKey] = useState("");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [alertType, setAlertType] = useState<AlertType>(null);
+  const [alertMessage, setAlertMessage] = useState<AlertMessage>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Simula análise de fraude
-    const random = Math.random();
-    if (random < 0.33) {
-      setAlertType("success");
-    } else if (random < 0.66) {
-      setAlertType("pending");
-    } else {
-      setAlertType("error");
-    }
+    setAlertType(null);
 
-    // Limpa o alerta após 5 segundos
-    setTimeout(() => {
-      setAlertType(null);
-      if (random < 0.33) {
-        navigate("/customer");
+    if (!user) return; 
+
+    const unmaskedPixKey = pixKey.replace(/[.\-() ]/g, "");
+
+    const requestBody = {
+      sender: {
+        pixKeyType: user.pixKeyType,
+        pixKey: user.pixKey,
+      },
+      receiver: {
+        pixKeyType: pixKeyType,
+        pixKey: unmaskedPixKey,
+      },
+      value: parseFloat(amount || "0"),
+      description: description,
+    };
+
+    try {
+      const response = await axios.post(
+        "http://localhost:8080/api/transactions",
+        requestBody
+      );
+      
+      const data = response.data;
+      if (data.status === "SUCCESS") {
+        setAlertType("success");
+        setAlertMessage("Pagamento enviado com sucesso!");
+        setTimeout(() => {
+          navigate("/customer");
+        }, 3000);
+      } else if (data.status === "PENDING_REVIEW") {
+        setAlertType("pending");
+        setAlertMessage(
+          `Sua transação está em análise. (Motivo: ${data.fraudDescription})`
+        );
+      } else if (data.status === "FAILED") {
+        setAlertType("error");
+        setAlertMessage(
+          `Falha na transação: ${data.fraudDescription || "Tente novamente."}`
+        );
       }
-    }, 5000);
+    } catch (error) {
+      console.error("Erro ao enviar a transação:", error);
+      setAlertType("error");
+      setAlertMessage("Erro ao conectar com o servidor. Tente mais tarde.");
+    }
   };
+
+  const renderPixKeyInput = () => {
+    const inputClassName = "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
+
+    switch (pixKeyType) {
+      case "CPF":
+        return (
+          <InputMask
+            mask="999.999.999-99"
+            value={pixKey}
+            onChange={(e) => setPixKey(e.target.value)}
+            className={inputClassName}
+            placeholder="000.000.000-00"
+            required
+          />
+        );
+      case "PHONE":
+        return (
+          <InputMask
+            mask="(99) 99999-9999"
+            value={pixKey}
+            onChange={(e) => setPixKey(e.target.value)}
+            className={inputClassName}
+            placeholder="(00) 00000-0000"
+            required
+          />
+        );
+      case "EMAIL":
+        return (
+          <Input
+            id="pixKey"
+            type="email"
+            placeholder="exemplo@email.com"
+            value={pixKey}
+            onChange={(e) => setPixKey(e.target.value)}
+            required
+          />
+        );
+      case "RANDOM_KEY":
+      default:
+        return (
+          <Input
+            id="pixKey"
+            placeholder="Chave aleatória (UUID)"
+            value={pixKey}
+            onChange={(e) => setPixKey(e.target.value)}
+            required
+          />
+        );
+    }
+  };
+  
+  const shadCnInputStyle = "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
+
+  if (!user) {
+    return <div>Carregando...</div>;
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -60,28 +164,48 @@ const PixTransferForm = () => {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="pixKey">Para quem?</Label>
-                <Input
-                  id="pixKey"
-                  placeholder="Digite a chave PIX"
-                  value={pixKey}
-                  onChange={(e) => setPixKey(e.target.value)}
-                  required
-                />
-              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="col-span-1 space-y-2">
+                  <Label htmlFor="pixKeyType">Tipo de Chave</Label>
+                  <Select
+                    value={pixKeyType}
+                    onValueChange={(value) => {
+                      setPixKeyType(value as PixKeyType);
+                      setPixKey("");
+                    }}
+                  >
+                    <SelectTrigger id="pixKeyType">
+                      <SelectValue placeholder="Tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="EMAIL">E-mail</SelectItem>
+                      <SelectItem value="CPF">CPF</SelectItem>
+                      <SelectItem value="PHONE">Celular</SelectItem>
+                      <SelectItem value="RANDOM_KEY">Aleatória</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
+                <div className="col-span-2 space-y-2">
+                  <Label htmlFor="pixKey">Chave</Label>
+                  {renderPixKeyInput()}
+                </div>
+              </div>
+              
               <div className="space-y-2">
                 <Label htmlFor="amount">Valor</Label>
-                <Input
+                <CurrencyInput
                   id="amount"
+                  name="amount"
                   placeholder="R$ 0,00"
                   value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
+                  onValueChange={(value) => setAmount(value || "")}
+                  intlConfig={{ locale: 'pt-BR', currency: 'BRL' }}
+                  className={shadCnInputStyle}
                   required
                 />
               </div>
-
+              
               <div className="space-y-2">
                 <Label htmlFor="description">Descrição (Opcional)</Label>
                 <Input
@@ -92,21 +216,21 @@ const PixTransferForm = () => {
                 />
               </div>
 
+              {/* === CÓDIGO CORRIGIDO ABAIXO === */}
+
               {alertType === "success" && (
                 <Alert className="bg-success/10 border-success text-success-foreground">
                   <CheckCircle2 className="h-4 w-4 text-success" />
                   <AlertDescription className="text-success">
-                    Pagamento enviado com sucesso!
+                    {alertMessage}
                   </AlertDescription>
                 </Alert>
               )}
-
+              
               {alertType === "error" && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>
-                    Falha na transação. Tente novamente.
-                  </AlertDescription>
+                  <AlertDescription>{alertMessage}</AlertDescription>
                 </Alert>
               )}
 
@@ -114,7 +238,7 @@ const PixTransferForm = () => {
                 <Alert className="bg-amber-50 border-amber-500 text-amber-900">
                   <Clock className="h-4 w-4 text-amber-600" />
                   <AlertDescription className="text-amber-900">
-                    Sua transação está em análise.
+                    {alertMessage}
                   </AlertDescription>
                 </Alert>
               )}

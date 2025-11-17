@@ -1,13 +1,18 @@
+// Em: src/pages/LoginScreen.tsx
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+// 1. Removemos o 'useNavigate', pois o Contexto agora cuida disso
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+// 2. Importamos nosso hook 'useAuth'
+import { useAuth } from "@/context/AuthContext";
 
 const LoginScreen = () => {
-  const navigate = useNavigate();
+  // const navigate = useNavigate(); // Não precisamos mais
+  const { login } = useAuth(); // 3. Pegamos a função de login do contexto
+
   const [userType, setUserType] = useState<"cliente" | "analista">("cliente");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -15,20 +20,19 @@ const LoginScreen = () => {
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (userType === "cliente") {
-      navigate("/customer");
-    } else {
-      navigate("/analyst");
-    }
+    // 4. Em vez de navegar, chamamos a função 'login'
+    // (Por enquanto, não validamos senha, apenas o tipo)
+    login(userType);
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md shadow-lg">
+        {/* ... (O resto do seu JSX de Header/Título não muda) ... */}
         <CardHeader className="space-y-4 pb-8 pt-8">
           <div className="flex justify-center mb-2">
             <div className="text-3xl font-bold text-primary">
-              Validador PIX
+              Bradesco
             </div>
           </div>
           <CardTitle className="text-center text-xl text-muted-foreground">
@@ -43,8 +47,10 @@ const LoginScreen = () => {
               <TabsTrigger value="analista">Analista</TabsTrigger>
             </TabsList>
 
+            {/* O 'onSubmit' agora chama o NOVO 'handleLogin' */}
             <TabsContent value="cliente" className="mt-0">
               <form onSubmit={handleLogin} className="space-y-4">
+                {/* ... (O resto do seu formulário de Cliente não muda) ... */}
                 <div className="space-y-2">
                   <Label htmlFor="username-cliente">CPF</Label>
                   <Input
@@ -74,6 +80,7 @@ const LoginScreen = () => {
 
             <TabsContent value="analista" className="mt-0">
               <form onSubmit={handleLogin} className="space-y-4">
+                {/* ... (O resto do seu formulário de Analista não muda) ... */}
                 <div className="space-y-2">
                   <Label htmlFor="username-analista">Usuário</Label>
                   <Input

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react"; // Importamos o useEffect
+import axios from "axios"; // Importamos o Axios
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -14,87 +15,117 @@ import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, XCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-type Transaction = {
-  id: string;
-  date: string;
-  amount: string;
-  sender: string;
-  recipient: string;
-  reason: string;
-  status: "pending" | "approved" | "rejected";
+// ==========================================================
+// 1. ATUALIZAMOS O 'TYPE' PARA BATER COM A RESPOSTA REAL DA API
+// ==========================================================
+type UserResponse = {
+  id: number;
+  cpf: string;
+  name: string;
+  pixKey: string;
+  pixKeyType: string;
 };
 
-const mockTransactions: Transaction[] = [
-  {
-    id: "TX001",
-    date: "2024-01-15 14:32",
-    amount: "R$ 5.000,00",
-    sender: "Carlos Silva",
-    recipient: "Maria Santos",
-    reason: "Valor alto para perfil",
-    status: "pending",
-  },
-  {
-    id: "TX002",
-    date: "2024-01-15 14:28",
-    amount: "R$ 250,00",
-    sender: "João Oliveira",
-    recipient: "Pedro Costa",
-    reason: "Múltiplas transferências",
-    status: "pending",
-  },
-  {
-    id: "TX003",
-    date: "2024-01-15 14:15",
-    amount: "R$ 1.200,00",
-    sender: "Ana Paula",
-    recipient: "Lucas Mendes",
-    reason: "Primeiro PIX para destinatário",
-    status: "approved",
-  },
-  {
-    id: "TX004",
-    date: "2024-01-15 14:10",
-    amount: "R$ 8.500,00",
-    sender: "Roberto Alves",
-    recipient: "Conta Suspeita",
-    reason: "Destinatário em lista restrita",
-    status: "rejected",
-  },
-];
+type Transaction = {
+  id: number; // Era string, agora é number
+  value: number; // Era string (ex: "R$ 5.000,00"), agora é number
+  description: string;
+  status: string; // O status do backend (ex: "SUCCESS", "PENDING_REVIEW")
+  fraudCode: string;
+  fraudDescription: string;
+  sender: UserResponse;
+  receiver: UserResponse;
+  // O campo 'date' não existe na sua API, usaremos o 'id'
+};
+
+// Mapeia o status do backend para o filtro local
+type FilterStatus = "PENDING_REVIEW" | "SUCCESS" | "FAILED";
 
 const FraudDashboard = () => {
-  const [transactions, setTransactions] = useState<Transaction[]>(mockTransactions);
-  const [filter, setFilter] = useState<"pending" | "approved" | "rejected">("pending");
+  // O state agora armazena o status do backend
+  const [filter, setFilter] = useState<FilterStatus>("PENDING_REVIEW");
+  
+  // O state começa vazio, não com mocks
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const { toast } = useToast();
 
-  const handleApprove = (id: string) => {
-    setTransactions(prev =>
-      prev.map(t => t.id === id ? { ...t, status: "approved" as const } : t)
-    );
-    toast({
-      title: "Transação aprovada",
-      description: `Transação ${id} foi aprovada com sucesso.`,
-    });
+  // ==========================================================
+  // 2. FUNÇÃO PARA BUSCAR OS DADOS REAIS DA API
+  // ==========================================================
+  const fetchTransactions = async (status: FilterStatus) => {
+    try {
+      const response = await axios.get(
+        `http://localhost:8080/api/transactions/status/${status}`
+      );
+      setTransactions(response.data); // Coloca os dados da API no state
+    } catch (error) {
+      console.error("Erro ao buscar transações:", error);
+      toast({
+        title: "Erro ao carregar dados",
+        description: "Não foi possível buscar as transações da API.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleReject = (id: string) => {
-    setTransactions(prev =>
-      prev.map(t => t.id === id ? { ...t, status: "rejected" as const } : t)
-    );
-    toast({
-      title: "Transação rejeitada",
-      description: `Transação ${id} foi rejeitada.`,
-      variant: "destructive",
-    });
+  // ==========================================================
+  // 3. USEEFFECT: O 'CÉREBRO' QUE RODA QUANDO A TELA CARREGA
+  // ==========================================================
+  // Isso vai rodar uma vez quando o componente carregar,
+  // e de novo toda vez que o 'filter' (a aba) mudar.
+  useEffect(() => {
+    fetchTransactions(filter);
+  }, [filter]); // O 'trigger' é a mudança do filtro
+
+  // ==========================================================
+  // 4. ATUALIZAMOS OS BOTÕES PARA CHAMAR A API
+  // ==========================================================
+  const handleApprove = async (id: number) => {
+    try {
+      // Chama o novo endpoint /approve
+      await axios.post(`http://localhost:8080/api/transactions/${id}/approve`);
+      
+      toast({
+        title: "Transação aprovada",
+        description: `Transação ${id} foi aprovada com sucesso.`,
+      });
+      
+      // Atualiza a lista: remove o item aprovado da lista de pendentes
+      setTransactions(prev => prev.filter(t => t.id !== id));
+    } catch (error) {
+      console.error("Erro ao aprovar:", error);
+      toast({ title: "Erro ao aprovar transação", variant: "destructive" });
+    }
   };
 
-  const filteredTransactions = transactions.filter(t => t.status === filter);
+  const handleReject = async (id: number) => {
+    try {
+      // Chama o novo endpoint /reject
+      await axios.post(`http://localhost:8080/api/transactions/${id}/reject`);
+      
+      toast({
+        title: "Transação rejeitada",
+        description: `Transação ${id} foi rejeitada.`,
+        variant: "destructive",
+      });
+      
+      // Atualiza a lista: remove o item rejeitado da lista de pendentes
+      setTransactions(prev => prev.filter(t => t.id !== id));
+    } catch (error) {
+      console.error("Erro ao rejeitar:", error);
+      toast({ title: "Erro ao rejeitar transação", variant: "destructive" });
+    }
+  };
+
+  // Contagem para as abas (agora vem do state real)
+  const pendingCount = filter === 'PENDING_REVIEW' ? transactions.length : 0;
+  // (Idealmente, faríamos 3 chamadas separadas para pegar todas as contagens)
 
   return (
     <div className="min-h-screen bg-background">
       <header className="bg-card shadow-sm border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 py-6">
+        {/* ... (Seu JSX de Header - não muda) ... */}
+         <div className="max-w-7xl mx-auto px-4 py-6">
           <h1 className="text-2xl font-bold text-foreground">
             Painel de Análise de Risco
           </h1>
@@ -107,54 +138,62 @@ const FraudDashboard = () => {
             <CardTitle>Transações PIX</CardTitle>
           </CardHeader>
           <CardContent>
-            <Tabs value={filter} onValueChange={(v) => setFilter(v as typeof filter)} className="w-full">
+            <Tabs value={filter} onValueChange={(v) => setFilter(v as FilterStatus)} className="w-full">
               <TabsList className="grid w-full grid-cols-3 mb-6">
-                <TabsTrigger value="pending">
-                  Pendentes ({transactions.filter(t => t.status === "pending").length})
+                
+                {/* 5. Ajustamos os 'value' das abas para bater com o backend */}
+                <TabsTrigger value="PENDING_REVIEW">
+                  Pendentes ({pendingCount})
                 </TabsTrigger>
-                <TabsTrigger value="approved">
-                  Aprovadas ({transactions.filter(t => t.status === "approved").length})
+                <TabsTrigger value="SUCCESS">
+                  Aprovadas
                 </TabsTrigger>
-                <TabsTrigger value="rejected">
-                  Rejeitadas ({transactions.filter(t => t.status === "rejected").length})
+                <TabsTrigger value="FAILED">
+                  Rejeitadas
                 </TabsTrigger>
               </TabsList>
 
+              {/* A tabela agora é renderizada 3x, uma para cada aba */}
+              {/* (O conteúdo (TabsContent) já faz isso) */}
               <TabsContent value={filter} className="mt-0">
                 <div className="rounded-md border">
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>ID</TableHead>
-                        <TableHead>Data/Hora</TableHead>
                         <TableHead>Valor</TableHead>
-                        <TableHead>Remetente</TableHead>
-                        <TableHead>Destinatário</TableHead>
+                        <TableHead>Remetente (Chave)</TableHead>
+                        <TableHead>Destinatário (Chave)</TableHead>
                         <TableHead>Motivo da Suspeita</TableHead>
-                        {filter === "pending" && <TableHead className="text-right">Ações</TableHead>}
+                        {filter === "PENDING_REVIEW" && <TableHead className="text-right">Ações</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredTransactions.length === 0 ? (
+                      {transactions.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                             Nenhuma transação encontrada
                           </TableCell>
                         </TableRow>
                       ) : (
-                        filteredTransactions.map((transaction) => (
+                        // 6. Mapeamos os dados reais da API
+                        transactions.map((transaction) => (
                           <TableRow key={transaction.id}>
                             <TableCell className="font-medium">{transaction.id}</TableCell>
-                            <TableCell>{transaction.date}</TableCell>
-                            <TableCell className="font-semibold">{transaction.amount}</TableCell>
-                            <TableCell>{transaction.sender}</TableCell>
-                            <TableCell>{transaction.recipient}</TableCell>
+                            <TableCell className="font-semibold">
+                              {/* Formatamos o número (Double) para R$ */}
+                              {transaction.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </TableCell>
+                            <TableCell>{transaction.sender.pixKey}</TableCell>
+                            <TableCell>{transaction.receiver.pixKey}</TableCell>
                             <TableCell>
                               <Badge variant="outline" className="text-xs">
-                                {transaction.reason}
+                                {transaction.fraudDescription}
                               </Badge>
                             </TableCell>
-                            {filter === "pending" && (
+                            
+                            {/* Os botões agora chamam as funções 'async' */}
+                            {filter === "PENDING_REVIEW" && (
                               <TableCell className="text-right">
                                 <div className="flex justify-end gap-2">
                                   <Button

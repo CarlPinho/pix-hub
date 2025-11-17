@@ -2,7 +2,16 @@ import type { Config } from "tailwindcss";
 
 export default {
   darkMode: ["class"],
-  content: ["./pages/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./app/**/*.{ts,tsx}", "./src/**/*.{ts,tsx}"],
+  
+  // ===========================================
+  // A CORREÇÃO ESTÁ AQUI
+  // ===========================================
+  content: [
+    './index.html', // 1. Procura o HTML na raiz
+    './src/**/*.{js,ts,jsx,tsx}', // 2. Procura TODOS os arquivos .tsx/.jsx dentro de 'src'
+  ],
+  // ===========================================
+
   prefix: "",
   theme: {
     container: {

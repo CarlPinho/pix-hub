@@ -1,12 +1,26 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+// 1. Importamos o 'useAuth' (você já tinha)
+import { useAuth } from "@/context/AuthContext"; 
 import { Card } from "@/components/ui/card";
 import { Bell, Eye, EyeOff, ArrowLeftRight } from "lucide-react";
 
 const CustomerHome = () => {
   const navigate = useNavigate();
+  // 2. A MUDANÇA PRINCIPAL ESTÁ AQUI
+  // Trocamos 'const user = useAuth()' por:
+  const { user, logout } = useAuth(); 
+  
   const [showBalance, setShowBalance] = useState(false);
 
+  // 3. ADICIONAMOS ESTA VERIFICAÇÃO
+  // O 'user' pode ser 'null' (se não estiver logado).
+  // Se for, mostramos "Carregando..." para evitar erros.
+  if (!user) {
+    return <div>Carregando...</div>;
+  }
+
+  // Se o usuário existir, o código abaixo roda normalmente
   return (
     <div className="min-h-screen bg-background">
       {/* Header com gradiente vermelho */}
@@ -15,9 +29,12 @@ const CustomerHome = () => {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-              <span className="text-sm font-semibold">C</span>
+              {/* Usamos a inicial do nome vindo do contexto */}
+              <span className="text-sm font-semibold">{user.name.charAt(0)}</span>
             </div>
-            <span className="font-medium">Carlos Silva</span>
+            
+            {/* Usamos o nome vindo do contexto */}
+            <span className="font-medium">{user.name}</span> 
           </div>
           
           <div className="flex items-center gap-3">
@@ -27,13 +44,16 @@ const CustomerHome = () => {
                 1
               </span>
             </button>
-            <button onClick={() => navigate("/")} className="text-sm font-medium">
+            
+            {/* 4. BOTÃO SAIR CONECTADO */}
+            {/* Trocamos 'navigate("/")' pela função 'logout' do contexto */}
+            <button onClick={logout} className="text-sm font-medium">
               Sair
             </button>
           </div>
         </div>
 
-        {/* Saldo */}
+        {/* Saldo (O restante do seu JSX está perfeito) */}
         <div className="space-y-1">
           <div className="text-sm opacity-90">Saldo</div>
           <div className="flex items-center justify-between">
