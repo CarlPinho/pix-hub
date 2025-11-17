@@ -3,7 +3,10 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Index from "./pages/Index";
+import LoginScreen from "./pages/LoginScreen";
+import CustomerHome from "./pages/CustomerHome";
+import PixTransferForm from "./pages/PixTransferForm";
+import FraudDashboard from "./pages/FraudDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -15,7 +18,10 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
+          <Route path="/" element={<LoginScreen />} />
+          <Route path="/customer" element={<CustomerHome />} />
+          <Route path="/pix-transfer" element={<PixTransferForm />} />
+          <Route path="/analyst" element={<FraudDashboard />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
