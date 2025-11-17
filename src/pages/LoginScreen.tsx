@@ -46,10 +46,10 @@ const LoginScreen = () => {
             <TabsContent value="cliente" className="mt-0">
               <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="username-cliente">Agência e Conta</Label>
+                  <Label htmlFor="username-cliente">CPF</Label>
                   <Input
                     id="username-cliente"
-                    placeholder="0000-0 / 00000-0"
+                    placeholder="000.000.000-00"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     required
