@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react"; // Importamos o useEffect
-import axios from "axios"; // Importamos o Axios
+import { useState, useEffect } from "react";
+import axios from "axios";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -16,7 +16,7 @@ import { CheckCircle2, XCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 // ==========================================================
-// 1. ATUALIZAMOS O 'TYPE' PARA BATER COM A RESPOSTA REAL DA API
+// TIPAGEM FINAL DOS DADOS (DEVE BATER COM O TransactionResponse.java)
 // ==========================================================
 type UserResponse = {
   id: number;
@@ -27,105 +27,98 @@ type UserResponse = {
 };
 
 type Transaction = {
-  id: number; // Era string, agora é number
-  value: number; // Era string (ex: "R$ 5.000,00"), agora é number
+  id: number; 
+  value: number; 
   description: string;
   status: string; // O status do backend (ex: "SUCCESS", "PENDING_REVIEW")
-  fraudCode: string;
-  fraudDescription: string;
+  fraudCode: string | null;
+  fraudDescription: string | null;
   sender: UserResponse;
   receiver: UserResponse;
-  // O campo 'date' não existe na sua API, usaremos o 'id'
 };
 
-// Mapeia o status do backend para o filtro local
 type FilterStatus = "PENDING_REVIEW" | "SUCCESS" | "FAILED";
 
+const API_BASE_URL = "http://localhost:8080/api/transactions";
+
+
 const FraudDashboard = () => {
-  // O state agora armazena o status do backend
   const [filter, setFilter] = useState<FilterStatus>("PENDING_REVIEW");
-  
-  // O state começa vazio, não com mocks
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
   // ==========================================================
-  // 2. FUNÇÃO PARA BUSCAR OS DADOS REAIS DA API
+  // 1. FUNÇÃO PARA BUSCAR OS DADOS REAIS DA API (CHAMADA GET)
   // ==========================================================
   const fetchTransactions = async (status: FilterStatus) => {
+    setIsLoading(true);
     try {
       const response = await axios.get(
-        `http://localhost:8080/api/transactions/status/${status}`
+        `${API_BASE_URL}/status/${status}`
       );
-      setTransactions(response.data); // Coloca os dados da API no state
+      // O backend retorna o array de TransactionResponse
+      setTransactions(response.data); 
     } catch (error) {
       console.error("Erro ao buscar transações:", error);
       toast({
-        title: "Erro ao carregar dados",
-        description: "Não foi possível buscar as transações da API.",
+        title: "Erro de Conexão",
+        description: "Não foi possível buscar as transações da API. Servidor inativo ou erro de CORS.",
         variant: "destructive",
       });
+      setTransactions([]);
+    } finally {
+        setIsLoading(false);
     }
   };
 
   // ==========================================================
-  // 3. USEEFFECT: O 'CÉREBRO' QUE RODA QUANDO A TELA CARREGA
+  // 2. USEEFFECT: CARREGA DADOS QUANDO A ABA MUDA
   // ==========================================================
-  // Isso vai rodar uma vez quando o componente carregar,
-  // e de novo toda vez que o 'filter' (a aba) mudar.
   useEffect(() => {
+    // Quando o filtro muda (a aba), carregamos os novos dados
     fetchTransactions(filter);
-  }, [filter]); // O 'trigger' é a mudança do filtro
+  }, [filter]); 
+
 
   // ==========================================================
-  // 4. ATUALIZAMOS OS BOTÕES PARA CHAMAR A API
+  // 3. FUNÇÕES DE APROVAÇÃO/REJEIÇÃO (CHAMADAS POST PARA AÇÃO)
   // ==========================================================
-  const handleApprove = async (id: number) => {
+  const handleAction = async (id: number, action: 'approve' | 'reject') => {
     try {
-      // Chama o novo endpoint /approve
-      await axios.post(`http://localhost:8080/api/transactions/${id}/approve`);
+      // Endpoint exato que o seu backend espera: /transactions/{id}/approve
+      const response = await axios.post(`${API_BASE_URL}/${id}/${action}`);
       
+      const statusText = action === 'approve' ? 'aprovada' : 'rejeitada';
+
       toast({
-        title: "Transação aprovada",
-        description: `Transação ${id} foi aprovada com sucesso.`,
+        title: `Transação ${statusText}`,
+        description: `Transação #${id} foi ${statusText} com sucesso.`,
       });
       
-      // Atualiza a lista: remove o item aprovado da lista de pendentes
+      // Atualiza a lista: remove o item processado da lista de pendentes
       setTransactions(prev => prev.filter(t => t.id !== id));
+
     } catch (error) {
-      console.error("Erro ao aprovar:", error);
-      toast({ title: "Erro ao aprovar transação", variant: "destructive" });
+      console.error(`Erro ao processar ${action}:`, error);
+      // Alertamos o erro exato
+      toast({ 
+        title: "Erro ao processar transação", 
+        description: "O servidor retornou um erro ao tentar mudar o status.",
+        variant: "destructive" 
+      });
     }
   };
 
-  const handleReject = async (id: number) => {
-    try {
-      // Chama o novo endpoint /reject
-      await axios.post(`http://localhost:8080/api/transactions/${id}/reject`);
-      
-      toast({
-        title: "Transação rejeitada",
-        description: `Transação ${id} foi rejeitada.`,
-        variant: "destructive",
-      });
-      
-      // Atualiza a lista: remove o item rejeitado da lista de pendentes
-      setTransactions(prev => prev.filter(t => t.id !== id));
-    } catch (error) {
-      console.error("Erro ao rejeitar:", error);
-      toast({ title: "Erro ao rejeitar transação", variant: "destructive" });
-    }
-  };
 
-  // Contagem para as abas (agora vem do state real)
-  const pendingCount = filter === 'PENDING_REVIEW' ? transactions.length : 0;
-  // (Idealmente, faríamos 3 chamadas separadas para pegar todas as contagens)
+  // Mapeamento de contagens (precisaríamos de 3 chamadas GET para contagens reais, mas usaremos o state atual)
+  const pendingCount = transactions.length;
 
   return (
     <div className="min-h-screen bg-background">
+      {/* ... (Header) ... */}
       <header className="bg-card shadow-sm border-b border-border">
-        {/* ... (Seu JSX de Header - não muda) ... */}
-         <div className="max-w-7xl mx-auto px-4 py-6">
+        <div className="max-w-7xl mx-auto px-4 py-6">
           <h1 className="text-2xl font-bold text-foreground">
             Painel de Análise de Risco
           </h1>
@@ -140,10 +133,8 @@ const FraudDashboard = () => {
           <CardContent>
             <Tabs value={filter} onValueChange={(v) => setFilter(v as FilterStatus)} className="w-full">
               <TabsList className="grid w-full grid-cols-3 mb-6">
-                
-                {/* 5. Ajustamos os 'value' das abas para bater com o backend */}
                 <TabsTrigger value="PENDING_REVIEW">
-                  Pendentes ({pendingCount})
+                  Pendentes ({filter === 'PENDING_REVIEW' ? pendingCount : 0})
                 </TabsTrigger>
                 <TabsTrigger value="SUCCESS">
                   Aprovadas
@@ -153,8 +144,6 @@ const FraudDashboard = () => {
                 </TabsTrigger>
               </TabsList>
 
-              {/* A tabela agora é renderizada 3x, uma para cada aba */}
-              {/* (O conteúdo (TabsContent) já faz isso) */}
               <TabsContent value={filter} className="mt-0">
                 <div className="rounded-md border">
                   <Table>
@@ -169,56 +158,62 @@ const FraudDashboard = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {transactions.length === 0 ? (
+                      {isLoading ? (
                         <TableRow>
                           <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                            Nenhuma transação encontrada
+                            Carregando dados...
                           </TableCell>
                         </TableRow>
                       ) : (
-                        // 6. Mapeamos os dados reais da API
-                        transactions.map((transaction) => (
-                          <TableRow key={transaction.id}>
-                            <TableCell className="font-medium">{transaction.id}</TableCell>
-                            <TableCell className="font-semibold">
-                              {/* Formatamos o número (Double) para R$ */}
-                              {transaction.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        transactions.length === 0 ? (
+                            <TableRow>
+                            <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                                Nenhuma transação encontrada no status: {filter}
                             </TableCell>
-                            <TableCell>{transaction.sender.pixKey}</TableCell>
-                            <TableCell>{transaction.receiver.pixKey}</TableCell>
-                            <TableCell>
-                              <Badge variant="outline" className="text-xs">
-                                {transaction.fraudDescription}
-                              </Badge>
-                            </TableCell>
-                            
-                            {/* Os botões agora chamam as funções 'async' */}
-                            {filter === "PENDING_REVIEW" && (
-                              <TableCell className="text-right">
-                                <div className="flex justify-end gap-2">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="text-success hover:bg-success/10 hover:text-success border-success"
-                                    onClick={() => handleApprove(transaction.id)}
-                                  >
-                                    <CheckCircle2 className="h-4 w-4 mr-1" />
-                                    Aprovar
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive"
-                                    onClick={() => handleReject(transaction.id)}
-                                  >
-                                    <XCircle className="h-4 w-4 mr-1" />
-                                    Rejeitar
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            )}
-                          </TableRow>
-                        ))
+                            </TableRow>
+                        ) : (
+                            transactions.map((transaction) => (
+                            <TableRow key={transaction.id}>
+                                <TableCell className="font-medium">{transaction.id}</TableCell>
+                                <TableCell className="font-semibold">
+                                {/* Formatação de moeda para exibir na tela */}
+                                {transaction.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                </TableCell>
+                                <TableCell>{transaction.sender.pixKey}</TableCell>
+                                <TableCell>{transaction.receiver.pixKey}</TableCell>
+                                <TableCell>
+                                <Badge variant="outline" className="text-xs">
+                                    {transaction.fraudDescription || 'N/A'}
+                                </Badge>
+                                </TableCell>
+                                
+                                {filter === "PENDING_REVIEW" && (
+                                <TableCell className="text-right">
+                                    <div className="flex justify-end gap-2">
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="text-success hover:bg-success/10 hover:text-success border-success"
+                                        onClick={() => handleAction(transaction.id, 'approve')}
+                                    >
+                                        <CheckCircle2 className="h-4 w-4 mr-1" />
+                                        Aprovar
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive"
+                                        onClick={() => handleAction(transaction.id, 'reject')}
+                                    >
+                                        <XCircle className="h-4 w-4 mr-1" />
+                                        Rejeitar
+                                    </Button>
+                                    </div>
+                                </TableCell>
+                                )}
+                            </TableRow>
+                            ))
+                        )
                       )}
                     </TableBody>
                   </Table>
